@@ -1,0 +1,148 @@
+function [Th] = MyTheta(x,q,tol)
+
+%MyTheta evaluates FIRST Jacobi's theta function.
+%   Th = MyTheta(x,q) returns the values of the FIRST Jacobi's
+%   theta function for nome q (|q|<1)
+%RCG Feb/21
+
+if nargin<3, tol = eps; end
+if nargin<1, error('Not enough input arguments.'); end
+
+if(abs(q)>=1 )
+    error('Nome q must be |q|<1.')
+end
+
+Th=0;
+mytol=1e9;
+n=0;
+while(abs(mytol) > tol)
+ mytol=q.^(n.*(n+1));
+ newterm=(-1)^n.*mytol.*sin((2.*n+1).*x);
+ Th=Th+newterm;
+ n=n+1;
+end %while
+
+Th=2.*q.^(0.25).*Th;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [ThP] = MyThetaPrime(x,q,tol)
+
+%MyThetaPrime evaluates the DERIVATIVE of the FIRST Jacobi's theta function.
+%   Th = MyTheta(x,q) returns the values of the FIRST Jacobi's
+%   theta function for nome q (|q|<1)
+%RCG Feb/21
+
+if nargin<3, tol = eps; end
+if nargin<1, error('Not enough input arguments.'); end
+
+if(abs(q)>=1 )
+    error('Nome q must be |q|<1.')
+end
+
+ThP=0;
+mytol=1e9;
+n=0;
+while(abs(mytol) > tol)
+ mytol=q.^(n.*(n+1)).*(2.*n+1);
+ newterm=(-1)^n.*mytol.*cos((2.*n+1).*x);
+ ThP=ThP+newterm;
+ n=n+1;
+end %while
+
+ThP=2.*q.^(0.25).*ThP;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [Fofw] = ComplexPotential(c,p,w,w1,w2,b)
+
+topinput = (w - w1)./(2*c);
+topu = real(topinput);
+topv = imag(topinput);
+
+botinput = (w - w2)./(2*c);
+botu = real(botinput);
+botv = imag(botinput);
+
+linearterm = (1/2*pi*b*c)*real(w1-w2)*w;
+
+toplog = FirstJacobiTheta(topu,topv,p,truncate);
+botlog = FirstJacobiTheta(botu,botv,p,truncate);
+
+Fofw = log(toplog) - log(botlog) - linearterm;
+
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function Omegan = VortexVelocity(wn,wm,qn,qm,b,c)
+
+un = real(wn);
+vn = imag(wn);
+
+lambdan = Curvature(a,b,c,vn);
+lambdanp = CurvaturePrime(a,b,c,vn);
+
+unf = real((wn-wm)/(2*c));
+vnf = imag((wn-wm)/(2*c));
+
+jacobiterm = FirstJacobiTheta(unf,vnf,p,truncate);
+jacobiprimeterm = FirstJacobiThetaP(unf,vnf,p,truncate);
+
+fterm = (1/(2*c))*(jacobiprimeterm./jacobiterm) - (1/(2*pi*c*b))*real(wm);
+
+Omegan = (1/lambdan)*((qm*fterm) + 1i*(qn/2)*(lambdanp./lambdan) - qn*((un)./(2*pi*b*c)));
+
+
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+clear;
+clc;
+clf;
+
+%Torus setup
+b = 1; %minor radius
+a = sqrt(2)*b; %major radius
+c = sqrt(a^2 - b^2);
+
+%Want to solve the velocities, so we need to define Jacobi paramaters
+p = exp(-pi*b/c);
+truncate = 15;
+
+%initial positions in isothermal
+w1 = (pi/2) + 1i*(pi/3);
+q1 = 1;
+w2 = 0 + 1i*(pi/2);
+q2 = -1;
+
+u1 = real(w1);
+v1 = imag(w1);
+u2 = real(w2);
+v2 = imag(w2);
+
+%Integration setup
+y0 = [u1 v1 u2 v2];
+t0 = 0;
+tf = 100;
+tspan = [t0 tf];
+[t,y] = ode45(@(t,y) trajectories(y,q1,q2,a,b,c), tspan,y0);
+
+for j = 1:length(y)
+    for n = 1:4
+        y(j,n) = mod(y(j(n)),2*pi);
+    end
+end
+
+function dydt = trajectories(y,q1,q2,a,b,c)
+dydt = zeros(4,1);
+w1 = y(1) + 1i*(y(2));
+w2 = y(3) + 1i*(y(4));
+Omega1 = VortexVelocity(w1,w2,q1,q2,b,c);
+Omega2 = VortexVelocity(w2,w1,q2,q1,b,c);
+dydt(1) = imag(Omega1)./(Curvature(a,b,c,y(2)));
+dydt(2) = real(Omega1)./(Curvature(a,b,c,y(2)));
+dydt(3) = imag(Omega2)./(Curvature(a,b,c,y(4)));
+dydt(4) = real(Omega2)./(Curvature(a,b,c,y(4)));
+end
